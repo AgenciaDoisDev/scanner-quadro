@@ -1,0 +1,6 @@
+numpy>=1.26
+opencv-python>=4.8
+Pillow>=10.0
+streamlit>=1.30
+anthropic>=0.40
+pytest>=8.0
