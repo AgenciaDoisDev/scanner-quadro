@@ -47,6 +47,7 @@ Os testes comparam as funções feitas pelo grupo com as equivalentes do OpenCV
 - `docs/entrega2-documentacao-tecnica.pdf`: arquitetura, pipeline, pseudocódigo e bibliotecas
 - `docs/diretrizes-A3.pdf`: diretrizes do professor
 - `CLAUDE.md`: contexto do projeto e decisões tomadas
+- `RESUMO-DA-CONVERSA.md`: histórico completo do planejamento
 
 ## Estrutura
 
