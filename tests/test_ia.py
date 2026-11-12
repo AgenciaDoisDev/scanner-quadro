@@ -20,12 +20,9 @@ class _Mensagens:
 
     def create(self, model, max_tokens, messages):
         self.chamadas.append(messages)
-        tem_imagem = any(c.get("type") == "image" for c in messages[0]["content"])
-        if tem_imagem:
-            return types.SimpleNamespace(content=[_Bloco("x' = x + tx")])
         return types.SimpleNamespace(content=[_Bloco(
-            'Claro! {"tema": "Transformações no plano", "resumo": ["Translação"], '
-            '"explicacao": "Somar tx desloca o ponto."}')])
+            'Claro! {"transcricao": "x\' = x + tx", "tema": "Transformações no plano", '
+            '"resumo": ["Translação"], "explicacao": "Somar tx desloca o ponto."}')])
 
 
 def test_resumir_com_ia(monkeypatch):
@@ -41,4 +38,7 @@ def test_resumir_com_ia(monkeypatch):
     assert r["tema"] == "Transformações no plano"
     assert r["resumo"] == ["Translação"]
     assert "x' = x + tx" in r["transcricao"]
-    assert len(msgs.chamadas) == 3  # 2 transcrições + 1 resumo
+    assert len(msgs.chamadas) == 1  # uma chamada só, com os 2 blocos em ordem
+    conteudo = msgs.chamadas[0][0]["content"]
+    assert [c["type"] for c in conteudo] == ["text", "image", "text", "image", "text"]
+    assert "ilegível" in conteudo[-1]["text"]

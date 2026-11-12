@@ -6,14 +6,18 @@ import numpy as np
 from PIL import Image
 
 from . import config, ia
-from .geometria import achar_cantos, retificar
+from .geometria import ordenar_cantos, retificar
 from .preprocessamento import sobel, suavizar, tons_de_cinza
 from .realce import binarizar_adaptativo, corrigir_iluminacao, e_quadro_negro
 from .segmentacao import limpar_manchas, separar_blocos
 
 
 def processar_foto(rgb, cantos=None, usar_ia=True):
-    """Executa o pipeline completo. Devolve um dict com cada etapa, avisos e tempos."""
+    """Executa o pipeline completo. Devolve um dict com cada etapa, avisos e tempos.
+
+    `cantos`: os 4 cantos do quadro marcados pelo usuário (qualquer ordem).
+    Sem cantos, usa a foto inteira (sem correção de perspectiva).
+    """
     r = {"avisos": [], "tempos": {}}
     t = time.perf_counter
 
@@ -27,12 +31,9 @@ def processar_foto(rgb, cantos=None, usar_ia=True):
 
     t0 = t()
     if cantos is None:
-        cantos = achar_cantos(bordas)
-    if cantos is None:
-        r["avisos"].append("Não encontrei os 4 cantos do quadro; usei a foto inteira. "
-                           "Tente uma foto com o quadro inteiro aparecendo.")
         alt, larg = cinza.shape
         cantos = np.array([[0, 0], [larg - 1, 0], [larg - 1, alt - 1], [0, alt - 1]], float)
+    cantos = ordenar_cantos(cantos)
     quadro_cor, H = retificar(rgb, cantos)
     quadro = tons_de_cinza(quadro_cor)
     r.update(cantos=cantos, H=H, quadro_cor=quadro_cor.astype(np.uint8))
@@ -46,8 +47,8 @@ def processar_foto(rgb, cantos=None, usar_ia=True):
     r["tempos"]["iluminação e binarização"] = t() - t0
 
     t0 = t()
-    limpa, n_comp, n_manchas = limpar_manchas(B)
-    blocos = separar_blocos(limpa, claro.astype(np.uint8))
+    limpa, n_comp, n_manchas, forte = limpar_manchas(B)
+    blocos = separar_blocos(limpa, claro.astype(np.uint8), forte)
     r.update(limpa=limpa, componentes=n_comp, manchas_removidas=n_manchas, blocos=blocos)
     r["scan"] = (255 * (1 - limpa)).astype(np.uint8)  # escrita preta em fundo branco
     r["tempos"]["flood fill e blocos"] = t() - t0

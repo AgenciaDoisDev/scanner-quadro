@@ -110,3 +110,50 @@ def test_flood_fill_custo_4n_mais_1():
         pilha += [p + 20, p - 20, p + 1 if x + 1 < 20 else -1, p - 1 if x > 0 else -1]
     assert chamadas == 4 * 45 + 1
     assert segmentacao.flood_fill(Bl, 5 * 20 + 3, 2, [0] * len(Bl), 20) == 45
+
+
+# ---------------------------------------------------------------- limpeza, blocos e iluminação
+
+def test_media_local_retangular_igual_blur():
+    """Janela kh×kw (usada na dilatação dos blocos) igual ao cv2.blur."""
+    f = RNG.random((60, 80)) * 255
+    ref = cv2.blur(f, (21, 9), borderType=cv2.BORDER_REPLICATE)   # OpenCV: (largura, altura)
+    assert np.abs(media_local(f, (9, 21)) - ref).max() < 1e-9
+
+
+def test_limpeza_mantem_pingo_e_tira_mancha_isolada():
+    from scanner.segmentacao import limpar_manchas
+    B = np.zeros((200, 200), np.uint8)
+    B[100:130, 60:64] = 1          # haste do "i" (120 px): forte
+    B[92:95, 61:63] = 1            # pingo do "i" (6 px), 5 px acima: fica
+    B[40:43, 150:153] = 1          # mancha de 9 px, longe de tudo: sai
+    B[170, 100] = 1                # poeira de 1 px: sai
+    limpa, L, removidas, forte = limpar_manchas(B)
+    assert L == 4 and removidas == 2
+    assert limpa[92:95, 61:63].all() and limpa[100:130, 60:64].all()
+    assert not limpa[40:43, 150:153].any() and limpa[170, 100] == 0
+    assert forte.sum() == 120
+
+
+def test_iluminacao_tira_sombra():
+    """Fundo com sombra em degradê: depois da correção o fundo fica uniforme (≈ 255)
+    e a escrita continua escura."""
+    from scanner.realce import corrigir_iluminacao
+    x = np.linspace(0, 1, 300)
+    f = np.tile(120 + 110 * x, (200, 1))          # sombra: 120 à esquerda, 230 à direita
+    f[90:96, 20:280] *= 0.3                       # traço de caneta atravessando a sombra
+    g = corrigir_iluminacao(f)
+    fundo = np.r_[g[:80].ravel(), g[110:].ravel()]
+    assert fundo.min() > 240
+    assert g[90:96, 30:270].max() < 120
+
+
+def test_quadro_negro_pela_assimetria():
+    from scanner.realce import e_quadro_negro
+    branco = np.full((200, 300), 220.0)
+    branco[50:150:10, 30:270] = 30          # escrita escura em fundo claro
+    assert not e_quadro_negro(branco)
+    assert e_quadro_negro(255 - branco)     # giz claro em fundo escuro
+    # quadro verde iluminado: fundo em 120 (média > 100, a regra antiga errava), giz em 250
+    verde_iluminado = np.where(branco > 100, 120.0, 250.0)
+    assert verde_iluminado.mean() > 100 and e_quadro_negro(verde_iluminado)

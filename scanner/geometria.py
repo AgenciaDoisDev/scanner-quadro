@@ -1,40 +1,24 @@
 """Etapas 4 e 5 — cantos do quadro, homografia e warp inverso (Entrega 1, seção 5.4).
 
-A homografia, a eliminação de Gauss e o warp com interpolação bilinear são
-implementação própria. O OpenCV é usado apenas para extrair contornos.
+Os 4 cantos são marcados pelo usuário na foto (clicando). A partir deles, tudo é
+implementação própria: sistema 8×8 por eliminação de Gauss, homografia e warp
+inverso com interpolação bilinear.
 """
-import cv2
 import numpy as np
-
-from . import config
-from .preprocessamento import dilatar
 
 
 # ---------------------------------------------------------------- cantos
 
 def ordenar_cantos(p):
-    """Ordena 4 pontos em: superior-esquerdo, superior-direito, inferior-direito, inferior-esquerdo."""
+    """Ordena 4 pontos em: superior-esquerdo, superior-direito, inferior-direito, inferior-esquerdo.
+
+    Assim o usuário pode clicar nos cantos em qualquer ordem.
+    """
     p = np.asarray(p, dtype=float).reshape(4, 2)
     soma = p[:, 0] + p[:, 1]
     dif = p[:, 1] - p[:, 0]
     return np.array([p[np.argmin(soma)], p[np.argmin(dif)],
                      p[np.argmax(soma)], p[np.argmax(dif)]])
-
-
-def achar_cantos(bordas, area_min=config.AREA_MIN_QUADRO, tol=config.TOLERANCIA_POLIGONO):
-    """Procura o maior contorno que vira um quadrilátero convexo. Devolve 4 cantos ou None."""
-    fechado = dilatar(bordas, 5) * 255  # fecha pequenas falhas na moldura
-    contornos, _ = cv2.findContours(fechado.astype(np.uint8), cv2.RETR_EXTERNAL,
-                                    cv2.CHAIN_APPROX_SIMPLE)
-    area_foto = bordas.shape[0] * bordas.shape[1]
-    for c in sorted(contornos, key=cv2.contourArea, reverse=True):
-        if cv2.contourArea(c) < area_min * area_foto:
-            break
-        for candidato in (c, cv2.convexHull(c)):
-            p = cv2.approxPolyDP(candidato, tol * cv2.arcLength(candidato, True), True)
-            if len(p) == 4 and cv2.isContourConvex(p):
-                return ordenar_cantos(p)
-    return None
 
 
 # ---------------------------------------------------------------- sistema linear

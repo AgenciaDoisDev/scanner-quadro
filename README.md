@@ -15,7 +15,7 @@ Requer Python 3.10 ou mais novo.
 python -m venv .venv
 # Windows:  .venv\Scripts\activate
 # Mac/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # app + testes (só o app: requirements.txt)
 ```
 
 ## Execução
@@ -30,7 +30,8 @@ Para usar pelo celular na mesma rede Wi-Fi, abra o endereço "Network URL" que o
 ### Resumo com IA (opcional)
 
 Copie `.env.example` para `.env` e preencha `ANTHROPIC_API_KEY`. Sem a chave, o app funciona
-normalmente; apenas o resumo fica desligado.
+normalmente; apenas o resumo fica desligado. No Streamlit Cloud, a chave vai em
+*Settings → Secrets*, no formato `ANTHROPIC_API_KEY = "..."`.
 
 ## Testes
 
@@ -55,7 +56,7 @@ Os testes comparam as funções feitas pelo grupo com as equivalentes do OpenCV
 | --- | --- | --- |
 | `scanner/captura.py` | Leitura e redimensionamento da foto | Etapa 0 |
 | `scanner/preprocessamento.py` | Tons de cinza, convolução, Gaussiano, Sobel separável, média por imagem integral | Seções 5.2 e 5.3 |
-| `scanner/geometria.py` | Cantos do quadro, sistema 8×8 com eliminação de Gauss, homografia, warp inverso bilinear | Seção 5.4 |
+| `scanner/geometria.py` | Ordenação dos cantos, sistema 8×8 com eliminação de Gauss, homografia, warp inverso bilinear | Seção 5.4 |
 | `scanner/realce.py` | Correção de iluminação e binarização adaptativa | Seções 5.5 e 5.6 |
 | `scanner/segmentacao.py` | Flood fill iterativo, rotulação, limpeza de manchas, blocos | Seção 6 |
 | `scanner/ia.py` | Transcrição, tema, resumo e explicação via API | Seção 7 |
@@ -63,5 +64,5 @@ Os testes comparam as funções feitas pelo grupo com as equivalentes do OpenCV
 | `scanner/config.py` | Parâmetros do pipeline | Entrega 2, seção 2 |
 | `app.py` | Interface Streamlit, com antes/depois e cada etapa | — |
 
-O OpenCV é usado só para extrair contornos (etapa 4) e como referência nos testes.
+O pacote `scanner/` não usa o OpenCV: ele aparece só nos testes, como referência. Os cantos do quadro (etapa 4) são marcados pelo usuário, clicando na foto.
 Toda a matemática avaliada (convolução, homografia, warp, flood fill e rotulação) é implementação própria em NumPy.

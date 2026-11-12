@@ -1,0 +1,4 @@
+# Para rodar os testes e gerar a amostra sintética (o app não precisa disto)
+-r requirements.txt
+opencv-python>=4.8
+pytest>=8.0

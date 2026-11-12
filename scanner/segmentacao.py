@@ -56,35 +56,36 @@ def rotular(B):
     return np.array(R, dtype=np.int32).reshape(alt, larg), L, np.array(areas)
 
 
-def limpar_manchas(B, a_min=config.A_MIN_MANCHA, raio=config.RAIO_VIZINHANCA):
+def limpar_manchas(B, a_min=config.A_MIN_MANCHA, a_pingo=config.A_MIN_PINGO,
+                   raio=config.RAIO_VIZINHANCA):
     """Remove manchas usando os rótulos do flood fill.
 
-    B'(q) = 0 quando q pertence a uma componente Cᵢ que:
-      • toca a borda da imagem (resto da moldura do quadro), ou
-      • tem área |Cᵢ| < a_min E está isolada (nenhuma escrita grande a menos de `raio` px).
-    A segunda condição preserva pingos de "i" e acentos, que ficam colados às letras.
+    Cada componente Cᵢ é classificada pela área:
+      • forte:  |Cᵢ| ≥ a_min                 → é escrita, fica;
+      • pingo:  a_pingo ≤ |Cᵢ| < a_min       → fica só se estiver a até `raio` px
+                                               de uma componente forte (pingo do "i",
+                                               acento, ":", ponto de fórmula);
+      • poeira: |Cᵢ| < a_pingo               → sai sempre.
+    Por fim, apaga a faixa junto à borda (resto da moldura do quadro).
+    Devolve (imagem limpa, nº de componentes, nº removidas, máscara das fortes).
     """
     R, L, areas = rotular(B)
     if L == 0:
-        return B.copy(), 0, 0
-    # faixa junto à borda (1,5% do tamanho): o que encosta nela é resto da moldura
+        return B.copy(), 0, 0, np.zeros_like(B)
+    forte = areas >= a_min
+    pingo = (areas >= a_pingo) & ~forte
+    forte[0] = pingo[0] = False
+
+    perto = dilatar(forte[R], 2 * raio + 1) > 0           # região a até `raio` px da escrita forte
+    tem_vizinho = np.bincount(R[perto], minlength=L + 1) > 0
+    manter = forte | (pingo & tem_vizinho)
+    manter[0] = False
+
+    limpa = manter[R].astype(np.uint8)
     alt, larg = B.shape
-    f = max(2, int(0.015 * min(alt, larg)))
-    borda = np.zeros(L + 1, bool)
-    borda[np.concatenate([R[:f].ravel(), R[-f:].ravel(), R[:, :f].ravel(), R[:, -f:].ravel()])] = True
-    borda[0] = False
-
-    grande = (areas >= a_min) & ~borda
-    grande[0] = False
-    perto_de_escrita = dilatar(grande[R], 2 * raio + 1)
-    tem_vizinho = np.zeros(L + 1, bool)
-    np.logical_or.at(tem_vizinho, R[R > 0], perto_de_escrita[R > 0].astype(bool))
-
-    remover = borda | ((areas < a_min) & ~tem_vizinho)
-    remover[0] = False
-    limpa = B.copy()
-    limpa[remover[R]] = 0
-    return limpa, L, int(remover.sum())
+    f = max(2, int(config.FAIXA_BORDA * min(alt, larg)))
+    limpa[:f], limpa[-f:], limpa[:, :f], limpa[:, -f:] = 0, 0, 0, 0
+    return limpa, L, int(L - manter.sum()), forte[R].astype(np.uint8)
 
 
 def reduzir_max(B, fator):
@@ -94,11 +95,18 @@ def reduzir_max(B, fator):
     return B[:a2 * fator, :l2 * fator].reshape(a2, fator, l2, fator).max(axis=(1, 3))
 
 
-def separar_blocos(B, imagem, fator=config.FATOR_BLOCOS, dil=config.DILATACAO_BLOCOS,
-                   area_min=config.AREA_MIN_BLOCO, margem=config.MARGEM_BLOCO):
-    """Dilata, rotula e recorta cada bloco de conteúdo. Devolve lista de (caixa, recorte)."""
+def separar_blocos(B, imagem, forte=None, fator=config.FATOR_BLOCOS,
+                   dil=config.DILATACAO_BLOCOS, area_min=config.AREA_MIN_BLOCO,
+                   margem=config.MARGEM_BLOCO):
+    """Junta as letras em blocos e recorta cada um. Devolve lista de (caixa, recorte).
+
+    A dilatação é mais larga na horizontal (dil = (altura, largura)): letras da mesma
+    linha se juntam antes de linhas diferentes. Um bloco só vale se tiver escrita
+    forte suficiente (TINTA_MIN_BLOCO px); o que sobra é resto de mancha.
+    """
+    forte = B if forte is None else forte
     pequena = reduzir_max(B, fator)
-    k = max(3, (dil // fator) | 1)  # tamanho ímpar
+    k = tuple(max(3, (d // fator) | 1) for d in dil)  # tamanhos ímpares
     D = dilatar(pequena, k)
     R, L, _ = rotular(D)
     if L == 0:
@@ -117,7 +125,8 @@ def separar_blocos(B, imagem, fator=config.FATOR_BLOCOS, dil=config.DILATACAO_BL
         esq = max(0, x0[r] * fator - margem)
         base = min(alt, (y1[r] + 1) * fator + margem)
         dir_ = min(larg, (x1[r] + 1) * fator + margem)
-        if (base - topo) * (dir_ - esq) >= area_min:
+        tinta_forte = int(forte[topo:base, esq:dir_].sum())
+        if (base - topo) * (dir_ - esq) >= area_min and tinta_forte >= config.TINTA_MIN_BLOCO:
             blocos.append(((topo, esq, base, dir_), imagem[topo:base, esq:dir_]))
     blocos.sort(key=lambda b: (b[0][0], b[0][1]))  # de cima para baixo, da esquerda para a direita
     return blocos

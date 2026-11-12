@@ -17,20 +17,16 @@ from . import config
 
 MODELO_PADRAO = "claude-sonnet-5-5"
 
-PROMPT_TRANSCRICAO = (
-    "Esta imagem é um trecho de um quadro de sala de aula, já recortado e limpo. "
-    "Transcreva fielmente o que está escrito, incluindo fórmulas (use notação simples). "
-    "Se houver desenho ou esquema, descreva-o em uma linha entre colchetes. "
-    "Responda só com a transcrição."
-)
-
-PROMPT_RESUMO = (
-    "Abaixo está a transcrição do quadro de uma aula. Responda APENAS com um JSON válido, "
-    "em português do Brasil, com as chaves:\n"
+PROMPT = (
+    "As imagens acima são de um quadro de sala de aula, já endireitado e limpo, em ordem "
+    "de leitura. Responda APENAS com um JSON válido, em português do Brasil, com as chaves:\n"
+    '  "transcricao": o que está escrito, fielmente, incluindo fórmulas em notação simples '
+    "(desenhos e esquemas descritos em uma linha entre colchetes);\n"
     '  "tema": o assunto da aula em uma frase curta;\n'
     '  "resumo": lista de 3 a 7 tópicos curtos com os pontos principais;\n'
-    '  "explicacao": explicação didática do conteúdo em 2 a 4 parágrafos, com um exemplo.\n\n'
-    "Transcrição:\n"
+    '  "explicacao": explicação didática em 2 a 4 parágrafos, como para um colega que '
+    "faltou à aula, com um exemplo.\n"
+    "Se algum trecho estiver ilegível, escreva [ilegível] em vez de inventar."
 )
 
 
@@ -66,22 +62,18 @@ def _extrair_json(texto):
 
 
 def resumir_com_ia(imagem_quadro, blocos, modelo=None):
-    """Devolve dict com transcricao, tema, resumo (lista) e explicacao."""
+    """Uma chamada só: manda os blocos em ordem de leitura (ou o quadro inteiro, se forem
+    muitos) e recebe um dict com transcricao, tema, resumo (lista) e explicacao."""
     import anthropic  # importado aqui para o resto do sistema funcionar sem o SDK
 
     modelo = modelo or os.environ.get("MODELO_IA", MODELO_PADRAO)
     cliente = anthropic.Anthropic()
 
-    # Poucos blocos: transcreve um a um (mais legível). Muitos: manda o quadro inteiro.
+    conteudo = []
     if 0 < len(blocos) <= config.MAX_BLOCOS_IA:
-        partes = [_chamar(cliente, modelo, [_imagem(rec), {"type": "text", "text": PROMPT_TRANSCRICAO}])
-                  for _, rec in blocos]
-        transcricao = "\n\n".join(partes)
+        for i, (_, recorte) in enumerate(blocos, 1):
+            conteudo += [{"type": "text", "text": f"Bloco {i}:"}, _imagem(recorte)]
     else:
-        transcricao = _chamar(cliente, modelo, [_imagem(imagem_quadro),
-                                                {"type": "text", "text": PROMPT_TRANSCRICAO}])
-
-    resposta = _chamar(cliente, modelo, [{"type": "text", "text": PROMPT_RESUMO + transcricao}])
-    dados = _extrair_json(resposta)
-    dados["transcricao"] = transcricao
-    return dados
+        conteudo.append(_imagem(imagem_quadro))
+    conteudo.append({"type": "text", "text": PROMPT})
+    return _extrair_json(_chamar(cliente, modelo, conteudo, max_tokens=3000))

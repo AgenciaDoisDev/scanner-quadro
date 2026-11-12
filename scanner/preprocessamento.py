@@ -63,19 +63,21 @@ def sobel(f):
 
 
 def media_local(f, k):
-    """Média em janela k×k, igual à convolução com a máscara (1/k²)·1ₖₓₖ.
+    """Média em janela k×k (ou kh×kw, se k for um par), igual à convolução com a
+    máscara 1/(kh·kw) de 1s.
 
     Calculada com imagem integral (soma acumulada), custo constante por pixel.
     """
     f = np.asarray(f, dtype=float)
-    r = k // 2
-    fp = np.pad(f, ((r + 1, r), (r + 1, r)), mode="edge")
+    kh, kw = (k, k) if np.isscalar(k) else k
+    rh, rw = kh // 2, kw // 2
+    fp = np.pad(f, ((rh + 1, rh), (rw + 1, rw)), mode="edge")
     S = fp.cumsum(0).cumsum(1)
     M, N = f.shape
-    total = S[k:k + M, k:k + N] - S[0:M, k:k + N] - S[k:k + M, 0:N] + S[0:M, 0:N]
-    return total / (k * k)
+    total = S[kh:kh + M, kw:kw + N] - S[0:M, kw:kw + N] - S[kh:kh + M, 0:N] + S[0:M, 0:N]
+    return total / (kh * kw)
 
 
 def dilatar(B, k):
-    """Dilatação binária: convolução com uma máscara de 1s k×k seguida de limiar (> 0)."""
+    """Dilatação binária: convolução com uma máscara de 1s (k×k ou kh×kw) seguida de limiar (> 0)."""
     return (media_local(B.astype(float), k) > 1e-9).astype(np.uint8)
